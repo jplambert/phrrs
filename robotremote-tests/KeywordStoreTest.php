@@ -2,74 +2,164 @@
 
 use \PhpRobotRemoteServer\KeywordStore;
 
-class KeywordStoreTests extends PHPUnit_Framework_TestCase {
-
-    private $keywordStore;
+class KeywordStoreTest extends PHPUnit_Framework_TestCase {
 
     protected function setUp() {
-        $this->keywordStore = new KeywordStore();
-        $this->keywordStore->collectKeywords(__DIR__.'/test-libraries');
+
     }
 
     protected function tearDown() {
 
     }
 
-    public function testGetKeywordNames() {
-        $keywordNames = $this->keywordStore->getKeywordNames();
-
-        $this->assertEquals(2, count($keywordNames));
-        $this->assertEquals('truth_of_life', $keywordNames[0]);
-        $this->assertEquals('strings_should_be_equal', $keywordNames[1]);
+    public function testCleanUpPhpArguments() {
+        $rawArguments = array(
+            '$abc',
+            '$prettymegagigalongandthatsnothngyetboooooyaaaaaa',
+            '$o',
+            '$somanyparameters'
+            );
+        $actual = KeywordStore::cleanUpPhpArguments($rawArguments);
+        $this->assertEquals(array(
+            'abc',
+            'prettymegagigalongandthatsnothngyetboooooyaaaaaa',
+            'o',
+            'somanyparameters'
+            ), $actual);
     }
 
-    public function testExecKeyword() {
-        $args = array();
-        $result = $this->keywordStore->execKeyword('truth_of_life', $args);
-
-        $this->assertEquals(42, $result);
+    public function testCleanUpPhpArgumentsNoArgs() {
+        $rawArguments = array();
+        $actual = KeywordStore::cleanUpPhpArguments($rawArguments);
+        $this->assertEquals(array(), $actual);
     }
 
-    public function testExecKeywordArgs() {
-        $args = array('abc', 'abc');
-        $result = $this->keywordStore->execKeyword('strings_should_be_equal', $args);
-
-        $this->assertTrue($result);
+    public function testCleanUpPhpDocumentation() {
+        $rawDocumentation = '/**
+   * Compare 2 strings. If they are not equal, throws exception.
+   */';
+        $actual = KeywordStore::cleanUpPhpDocumentation($rawDocumentation);
+        $this->assertEquals('Compare 2 strings. If they are not equal, throws exception.', $actual);
     }
 
-    public function testExecKeywordException() {
-        $this->setExpectedException('Exception');
-
-        $args = array('abc', 'def');
-        $result = $this->keywordStore->execKeyword('strings_should_be_equal', $args);
+    public function testFindFilesBasic() {
+        $rootDir = __DIR__.'/test-libraries';
+        $keywordStore = new KeywordStore();
+        $files = $keywordStore->findFiles($rootDir);
+        $this->assertEquals(array(
+                $rootDir.'/ExampleLibrary.php'
+            ), $files);
     }
 
-    public function testGetKeywordArgumentsNoArgs() {
-        $keywordArgs = $this->keywordStore->getKeywordArguments('truth_of_life');
+    public function testFindFilesMultipleFiles() {
+        $rootDir = __DIR__.'/test-libraries-multiple-files';
+        $keywordStore = new KeywordStore();
+        $files = $keywordStore->findFiles($rootDir);
 
-        $this->assertEquals(0, count($keywordArgs));
+        // Make sure check do not depend on the order of the elements: sorting the result
+        natsort($files);
+        $this->assertEquals(array(
+                $rootDir.'/another-subfolder/ClassesWithNamespace.php',
+                $rootDir.'/subfolder/MultipleClassInSameFolder1.php',
+                $rootDir.'/subfolder/MultipleClassInSameFolder2.php',
+                $rootDir.'/subfolder/MultipleClassInSameFolder3.php',
+                $rootDir.'/subfolder/deeply-nested/DeeplyNestedClasses.php',
+            ), $files);
     }
 
-    public function testGetKeywordArgumentsTwoArgs() {
-        $keywordArgs = $this->keywordStore->getKeywordArguments('strings_should_be_equal');
-
-        $this->assertEquals(2, count($keywordArgs));
-        $this->assertEquals('str1', $keywordArgs[0]);
-        $this->assertEquals('str2', $keywordArgs[1]);
+    public function testCollectKeywordsFromFile() {
+        $file = __DIR__.'/test-libraries/ExampleLibrary.php';
+        $keywordStore = new KeywordStore();
+        $keywordStore->collectKeywordsFromFile($file);
+        $keywords = $keywordStore->keywords;
+        $this->assertEquals(array(
+            'truth_of_life' => array(
+                    'file' => $file,
+                    'class' => '\\ExampleLibrary',
+                    'arguments' => array(),
+                    'documentation' => ''),
+            'strings_should_be_equal' => array(
+                    'file' => $file,
+                    'class' => '\\ExampleLibrary',
+                    'arguments' => array('str1', 'str2'),
+                    'documentation' => 'Compare 2 strings. If they are not equal, throws exception.')
+             ), $keywords);
     }
 
-    public function testGetKeywordDocumentationEmptyDoc() {
-        $keywordDoc = $this->keywordStore->getKeywordDocumentation('truth_of_life');
+    public function testCollectKeywordsMultipleFiles() {
+        $rootDir = __DIR__.'/test-libraries-multiple-files';
+        $keywordStore = new KeywordStore();
+        $keywordStore->collectKeywords($rootDir);
+        $keywords = $keywordStore->keywords;
+        $this->assertEquals(array(
+            'keywordWithNamespace1' => array(
+                    'file' => $rootDir.'/another-subfolder/ClassesWithNamespace.php',
+                    'class' => '\\TestNamespace\\ClassWithNamespace1',
+                    'arguments' => array(),
+                    'documentation' => ''),
+            'keywordWithNamespace2' => array(
+                    'file' => $rootDir.'/another-subfolder/ClassesWithNamespace.php',
+                    'class' => '\\TestNamespace\\ClassWithNamespace2',
+                    'arguments' => array(),
+                    'documentation' => ''),
+            'keywordWithNamespace3' => array(
+                    'file' => $rootDir.'/another-subfolder/ClassesWithNamespace.php',
+                    'class' => '\\TestNamespace\\ClassWithNamespace3',
+                    'arguments' => array(),
+                    'documentation' => ''),
+            'keywordWithNamespace4' => array(
+                    'file' => $rootDir.'/another-subfolder/ClassesWithNamespace.php',
+                    'class' => '\\TestNamespace\\ClassWithNamespace3',
+                    'arguments' => array(),
+                    'documentation' => ''),
+            'keywordWithNamespace5' => array(
+                    'file' => $rootDir.'/another-subfolder/ClassesWithNamespace.php',
+                    'class' => '\\TestNamespace\\ClassWithNamespace3',
+                    'arguments' => array(),
+                    'documentation' => ''),
 
-        $this->assertEquals('', $keywordDoc);
+            'deeplyNestedKeyword1' => array(
+                    'file' => $rootDir.'/subfolder/deeply-nested/DeeplyNestedClasses.php',
+                    'class' => '\\DeeplyNestedClass1',
+                    'arguments' => array(),
+                    'documentation' => ''),
+            'deeplyNestedKeyword2' => array(
+                    'file' => $rootDir.'/subfolder/deeply-nested/DeeplyNestedClasses.php',
+                    'class' => '\\DeeplyNestedClass1',
+                    'arguments' => array(),
+                    'documentation' => ''),
+            'deeplyNestedKeyword3' => array(
+                    'file' => $rootDir.'/subfolder/deeply-nested/DeeplyNestedClasses.php',
+                    'class' => '\\DeeplyNestedClass2',
+                    'arguments' => array(),
+                    'documentation' => ''),
+
+            'keywordInSameFolder1' => array(
+                    'file' => $rootDir.'/subfolder/MultipleClassInSameFolder1.php',
+                    'class' => '\\MultipleClassInSameFolder1',
+                    'arguments' => array(),
+                    'documentation' => ''),
+            'keywordInSameFolder2' => array(
+                    'file' => $rootDir.'/subfolder/MultipleClassInSameFolder1.php',
+                    'class' => '\\MultipleClassInSameFolder1',
+                    'arguments' => array(),
+                    'documentation' => ''),
+            'keywordInSameFolder3' => array(
+                    'file' => $rootDir.'/subfolder/MultipleClassInSameFolder1.php',
+                    'class' => '\\MultipleClassInSameFolder1',
+                    'arguments' => array(),
+                    'documentation' => ''),
+            'keywordInSameFolder4' => array(
+                    'file' => $rootDir.'/subfolder/MultipleClassInSameFolder2.php',
+                    'class' => '\\MultipleClassInSameFolder2',
+                    'arguments' => array(),
+                    'documentation' => ''),
+            'keywordInSameFolder5' => array(
+                    'file' => $rootDir.'/subfolder/MultipleClassInSameFolder3.php',
+                    'class' => '\\MultipleClassInSameFolder3',
+                    'arguments' => array(),
+                    'documentation' => ''),
+             ), $keywords);
     }
-
-    public function testGetKeywordDocumentationWithDoc() {
-        $keywordDoc = $this->keywordStore->getKeywordDocumentation('strings_should_be_equal');
-
-        $this->assertEquals('Compare 2 strings. If they are not equal, throws exception.', $keywordDoc);
-    }
-
-    // TODO special characters in doc
 
 }

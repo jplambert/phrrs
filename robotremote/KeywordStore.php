@@ -4,7 +4,8 @@ namespace PhpRobotRemoteServer;
 
 class KeywordStore {
 
-	private $classFinder;
+	private $keywordCollector;
+	private $verbose;
 
 	/*
 	 * Map (associative array):
@@ -17,11 +18,13 @@ class KeywordStore {
 	 */
 	var $keywords;
 
-    public function __construct(ClassFinder $classFinder = NULL) {
-    	if (!$classFinder) {
-    		$classFinder = new ClassFinder();
+    public function __construct(KeywordCollector $verbose = TRUE, $keywordCollector = NULL) {
+    	$this->verbose = $verbose;
+
+    	if (!$keywordCollector) {
+    		$keywordCollector = new KeywordCollector();
     	}
-    	$this->classFinder = $classFinder;
+    	$this->keywordCollector = $keywordCollector;
     }
 
 	public function collectKeywords($keywordsDirectory) {
@@ -30,6 +33,13 @@ class KeywordStore {
 		$this->keywords = array();
 		foreach ($files as $file) {
 		  	$this->collectKeywordsFromFile($file);
+		}
+
+		if ($this->verbose) {
+			echo("List of defined keywords:\n");
+			foreach ($this->keywordReport() as $keyword => $fromFile) {
+				echo("- ".$keyword."\t\t--> from: ".$fromFile."\n");
+			}
 		}
 	}
 
@@ -58,7 +68,11 @@ class KeywordStore {
 	}
 
 	function collectKeywordsFromFile($file) {
-		$functionsByClasses = $this->classFinder->findFunctionsByClasses($file);
+		if ($this->verbose) {
+			echo('Looking for keyword definitions into: '.$file."\n");
+		}
+
+		$functionsByClasses = $this->keywordCollector->findFunctionsByClasses($file);
 		foreach ($functionsByClasses as $class => $functions) {
 			foreach ($functions as $function => $functionInfo) {
 				$rawArguments = $functionInfo['arguments'];
@@ -97,6 +111,16 @@ class KeywordStore {
 	  	$doc = preg_replace("/\*\s/", "", $doc);
 
 		return $doc;
+	}
+
+	function keywordReport() {
+		$keywordReport = array();
+
+		foreach ($this->keywords as $keyword => $keywordInfo) {
+			$keywordReport[$keyword] = $keywordInfo['file'];
+		}
+
+		return $keywordReport;
 	}
 
 	public function getKeywordNames() {
